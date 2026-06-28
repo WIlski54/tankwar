@@ -16,12 +16,15 @@ def load_glb(path):
         data = f.read()
     magic, ver, length = struct.unpack_from("<III", data, 0)
     assert magic == 0x46546C67, "not a glb"
+    assert ver == 2, f"unsupported GLB version {ver}"
     off = 12; jc = bc = None
     while off < length:
         clen, ctype = struct.unpack_from("<II", data, off); off += 8
         chunk = data[off:off+clen]; off += clen
         if ctype == 0x4E4F534A: jc = chunk
         elif ctype == 0x004E4942: bc = chunk
+    if jc is None:
+        raise ValueError(f"No JSON chunk found in {path!r}")
     return GLB(json.loads(jc.decode("utf-8")), bc or b"")
 
 def read_accessor(g, idx):
@@ -59,8 +62,8 @@ class BinWriter:
                "count":count, "type":type_str}
         # min/max required for POSITION; harmless elsewhere for VEC3 floats
         if type_str in ("VEC3","VEC2","SCALAR") and comp_type == 5126:
-            acc["min"] = arr.min(axis=0).astype(float).tolist()
-            acc["max"] = arr.max(axis=0).astype(float).tolist()
+            acc["min"] = np.atleast_1d(arr.min(axis=0)).astype(float).tolist()
+            acc["max"] = np.atleast_1d(arr.max(axis=0)).astype(float).tolist()
         if normalized: acc["normalized"] = True
         acc_idx = len(self.accessors); self.accessors.append(acc)
         return acc_idx
