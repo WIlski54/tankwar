@@ -931,7 +931,7 @@ function processNetworkEvents(events) {
     lastNetworkEvent = event.id;
     const position = new THREE.Vector3(event.x ?? 0, event.y ?? 2.5, event.z ?? 0);
     if (event.type === "shot") {
-      gameAudio.shot(0.66);
+      gameAudio.shot(event.playerId === networkPlayerId ? 0.95 : 0.52);
     } else if (event.type === "impact" || event.type === "shield" || event.type === "reflect") {
       burst(position, event.lethal ? 0xff263b : CYAN, 16, 12);
       gameAudio.explosion(0.44);
@@ -1313,7 +1313,8 @@ function fire(entity, now) {
     wallBreaker,
   });
   burst(position, shotColor, lethal || wallBreaker ? 22 : 8, lethal || wallBreaker ? 12 : 7);
-  gameAudio.shot(0.74);
+  const shotVolume = mode === "ai" && entity.id !== 0 ? 0.62 : 1;
+  gameAudio.shot(shotVolume);
 }
 
 function deployMine(entity, now) {

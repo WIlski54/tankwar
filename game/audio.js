@@ -115,7 +115,7 @@ export class GameAudio {
     audio.play().catch(() => {});
   }
 
-  shot(volume = 0.72) {
+  shot(volume = 0.9) {
     if (!this.unlocked || !this.shots.length) return;
     const audio = this.shots[this.shotIndex];
     this.shotIndex = (this.shotIndex + 1) % this.shots.length;
