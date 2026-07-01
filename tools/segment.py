@@ -16,6 +16,8 @@ class Config:
     turret_y_min: float = 0.15
     barrel_z_max: float = 0.10
     barrel_x_min: float = 0.55  # barrel reaches beyond this |X| at turret height
+    barrel_y_min: float = 0.03  # tube underside sits below the turret threshold
+    barrel_y_max: float = 0.18
 
 def side_of(z, thr=0.20):
     return 1 if z > thr else (-1 if z < -thr else 0)
@@ -30,9 +32,11 @@ def classify(pos, idx, cfg: Config):
     # Turret: upper-central mass
     turret = (Y > cfg.turret_y_min) & (np.abs(Z) < cfg.side_z_min + 0.05)
     lab[turret] = TURRET
-    # Barrel: thin, high, reaching toward the front
-    barrel = turret & (np.abs(Z) < cfg.barrel_z_max) & \
-             (cfg.front_sign * X > cfg.barrel_x_min)
+    # Barrel: thin forward tube. It deliberately does not depend on the turret mask:
+    # the tube underside is lower than turret_y_min and otherwise remains in Hull.
+    barrel = (np.abs(Z) < cfg.barrel_z_max) & \
+             (cfg.front_sign * X > cfg.barrel_x_min) & \
+             (Y > cfg.barrel_y_min) & (Y < cfg.barrel_y_max)
     lab[barrel] = BARREL
 
     # Running gear band (below body, on a side)

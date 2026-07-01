@@ -38,6 +38,18 @@ def test_labels_partition_and_belt_wheel():
     assert (tu == S.TURRET).mean() > 0.8
     assert set(np.unique(labels)).issubset(set(range(7)))
 
+def test_low_barrel_is_not_left_in_hull():
+    # The real tube underside is below turret_y_min and must still rotate with it.
+    pos = np.array([
+        [0.70, 0.05, -0.03], [0.72, 0.06, 0.03], [0.75, 0.05, 0.00],
+        [0.00, 0.05, -0.03], [0.02, 0.06, 0.03], [0.05, 0.05, 0.00],
+    ])
+    idx = np.array([[0, 1, 2], [3, 4, 5]])
+    labels = S.classify(pos, idx, S.Config(front_sign=1, turret_y_min=0.15))
+    assert labels[0] == S.BARREL
+    assert labels[1] == S.HULL
+
 if __name__ == "__main__":
     test_side_split(); print("side OK")
     test_labels_partition_and_belt_wheel(); print("labels OK")
+    test_low_barrel_is_not_left_in_hull(); print("low barrel OK")

@@ -2,3 +2,10 @@ tools/out/
 __pycache__/
 *.pyc
 node_modules/
+deploy/
+.claude/
+.env
+*.log
+Meshy_*.glb
+assets/tank.glb
+assets/tank_base.glb

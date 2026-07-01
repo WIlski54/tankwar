@@ -1,0 +1,11 @@
+.git
+.github
+.claude
+node_modules
+deploy
+tools
+*.log
+.env
+Meshy_*.glb
+assets/tank.glb
+assets/tank_base.glb

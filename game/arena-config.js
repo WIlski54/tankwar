@@ -1,0 +1,5 @@
+export const BASE_ARENA_SIZE = 24;
+export const ARENA_SCALE = 6;
+export const ARENA_EXPANSION = 5;
+export const ARENA_SECTOR_SIZE = BASE_ARENA_SIZE * ARENA_SCALE;
+export const ARENA_SIZE = ARENA_SECTOR_SIZE * ARENA_EXPANSION;
