@@ -57,7 +57,7 @@ import {
   removePowerups,
   syncNetworkPowerups,
   updatePowerupVisuals,
-} from "./powerups.js?v=20260630-network1";
+} from "./powerups.js?v=20260701-satellite-crate1";
 import {
   choosePortalExit,
   findEnteredPortal,

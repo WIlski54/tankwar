@@ -54,7 +54,7 @@ export const POWERUP_TYPES = Object.freeze({
   satellite: Object.freeze({
     label: "SATELLITENSICHT",
     color: 0x8de8ff,
-    url: null,
+    url: assetUrl("./assets/powerups/satellite.glb"),
     initialDelay: [35, 65],
     respawnDelay: [90, 140],
   }),
@@ -92,92 +92,16 @@ function makePedestal(color) {
   return group;
 }
 
-function disposable(geometry) {
-  geometry.userData.disposable = true;
-  return geometry;
-}
-
-function makeSatelliteModel() {
-  const group = new THREE.Group();
-  const shell = new THREE.Mesh(
-    disposable(new THREE.BoxGeometry(1.5, 1.5, 1.5)),
-    new THREE.MeshPhysicalMaterial({
-      color: 0x071b28,
-      emissive: 0x164f66,
-      emissiveIntensity: 1.4,
-      metalness: 0.72,
-      roughness: 0.22,
-      transparent: true,
-      opacity: 0.88,
-    }),
-  );
-  group.add(shell);
-  const edges = new THREE.LineSegments(
-    disposable(new THREE.EdgesGeometry(shell.geometry)),
-    new THREE.LineBasicMaterial({
-      color: 0x8de8ff,
-      transparent: true,
-      opacity: 0.95,
-      toneMapped: false,
-    }),
-  );
-  group.add(edges);
-
-  const orbit = new THREE.Mesh(
-    disposable(new THREE.TorusGeometry(1.02, 0.035, 8, 48)),
-    new THREE.MeshBasicMaterial({ color: 0x8de8ff, toneMapped: false }),
-  );
-  orbit.rotation.x = Math.PI / 2;
-  group.add(orbit);
-
-  const satellite = new THREE.Group();
-  const body = new THREE.Mesh(
-    disposable(new THREE.CylinderGeometry(0.16, 0.16, 0.56, 12)),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
-  );
-  body.rotation.z = Math.PI / 2;
-  satellite.add(body);
-  for (const side of [-1, 1]) {
-    const panel = new THREE.Mesh(
-      disposable(new THREE.BoxGeometry(0.62, 0.06, 0.34)),
-      new THREE.MeshBasicMaterial({ color: 0x15e7ff, toneMapped: false }),
-    );
-    panel.position.x = side * 0.52;
-    satellite.add(panel);
-  }
-  const dish = new THREE.Mesh(
-    disposable(new THREE.SphereGeometry(0.28, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)),
-    new THREE.MeshBasicMaterial({
-      color: 0xfff6cf,
-      wireframe: true,
-      side: THREE.DoubleSide,
-      toneMapped: false,
-    }),
-  );
-  dish.position.y = 0.28;
-  dish.rotation.x = Math.PI;
-  satellite.add(dish);
-  satellite.position.y = 0.1;
-  satellite.rotation.y = -0.35;
-  group.add(satellite);
-  return group;
-}
-
 export async function loadPowerups(scene, preset = "local") {
   const pool = expandPowerupPool(preset);
   const entries = await Promise.all(pool.map(async ({ id, type }) => {
     const config = POWERUP_TYPES[type];
     const group = new THREE.Group();
-    let model;
-    if (config.url) {
-      if (!templatePromises.has(config.url)) {
-        templatePromises.set(config.url, loader.loadAsync(config.url));
-      }
-      const gltf = await templatePromises.get(config.url);
-      model = gltf.scene.clone(true);
-    } else {
-      model = makeSatelliteModel();
+    if (!templatePromises.has(config.url)) {
+      templatePromises.set(config.url, loader.loadAsync(config.url));
     }
+    const gltf = await templatePromises.get(config.url);
+    const model = gltf.scene.clone(true);
     model.scale.setScalar(2.2);
     model.traverse((object) => {
       if (!object.isMesh) return;

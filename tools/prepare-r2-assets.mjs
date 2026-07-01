@@ -19,6 +19,7 @@ const files = [
   "assets/powerups/lethal.glb",
   "assets/powerups/hammer.glb",
   "assets/powerups/mine.glb",
+  "assets/powerups/satellite.glb",
   "assets/audio/tank-drive.mp3",
   "assets/audio/explosion.mp3",
   "assets/audio/tank-shot.mp3",
