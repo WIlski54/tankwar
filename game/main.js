@@ -589,9 +589,9 @@ function updateShieldVisual(entity, dt, now) {
 
 function makeTacticalMarker() {
   const group = new THREE.Group();
-  group.position.y = 7.2;
+  group.position.y = 7.4;
   group.visible = false;
-  const material = new THREE.MeshBasicMaterial({
+  const tankMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
     opacity: 0.95,
@@ -599,25 +599,79 @@ function makeTacticalMarker() {
     depthWrite: false,
     toneMapped: false,
   });
-  const coreGeometry = new THREE.CircleGeometry(6.4, 4);
-  coreGeometry.userData.runtimeOwned = true;
-  const core = new THREE.Mesh(coreGeometry, material);
-  core.rotation.x = -Math.PI / 2;
-  core.rotation.z = Math.PI / 4;
-  group.add(core);
-  for (const radius of [9.5, 13]) {
-    const geometry = new THREE.RingGeometry(radius - 0.28, radius, 44);
+  const ringMaterial = tankMaterial.clone();
+  ringMaterial.opacity = 0.42;
+  const detailMaterial = new THREE.MeshBasicMaterial({
+    color: 0x02080d,
+    transparent: true,
+    opacity: 0.82,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+
+  const own = (geometry) => {
     geometry.userData.runtimeOwned = true;
-    const ring = new THREE.Mesh(geometry, material);
-    ring.rotation.x = -Math.PI / 2;
-    group.add(ring);
+    return geometry;
+  };
+  const addMesh = (parent, geometry, material, position, renderOrder = 90) => {
+    const mesh = new THREE.Mesh(own(geometry), material);
+    mesh.position.set(...position);
+    mesh.renderOrder = renderOrder;
+    parent.add(mesh);
+    return mesh;
+  };
+
+  // Two broad tracks make the unit immediately readable as a tank from orbit.
+  addMesh(group, new THREE.BoxGeometry(2.15, 0.24, 9.8), tankMaterial, [-3.45, 0, 0]);
+  addMesh(group, new THREE.BoxGeometry(2.15, 0.24, 9.8), tankMaterial, [3.45, 0, 0]);
+  for (const x of [-3.45, 3.45]) {
+    for (const z of [-3.25, 0, 3.25]) {
+      addMesh(group, new THREE.BoxGeometry(1.35, 0.28, 0.48), detailMaterial, [x, 0.16, z], 91);
+    }
   }
-  const beaconGeometry = new THREE.CylinderGeometry(0.08, 0.34, 9, 10, 1, true);
-  beaconGeometry.userData.runtimeOwned = true;
-  const beacon = new THREE.Mesh(beaconGeometry, material);
-  beacon.position.y = 4.5;
-  group.add(beacon);
-  group.userData.markerMaterial = material;
+
+  const hullShape = new THREE.Shape();
+  hullShape.moveTo(-2.35, -4.3);
+  hullShape.lineTo(2.35, -4.3);
+  hullShape.lineTo(3.05, -2.25);
+  hullShape.lineTo(2.75, 3.75);
+  hullShape.lineTo(-2.75, 3.75);
+  hullShape.lineTo(-3.05, -2.25);
+  hullShape.closePath();
+  const hull = addMesh(group, new THREE.ShapeGeometry(hullShape), tankMaterial, [0, 0.2, 0], 92);
+  hull.rotation.x = -Math.PI / 2;
+  addMesh(group, new THREE.BoxGeometry(3.7, 0.2, 1.15), detailMaterial, [0, 0.38, -2.45], 93);
+
+  // The turret follows the real turret yaw, while the hull follows tank heading.
+  const turretSymbol = new THREE.Group();
+  turretSymbol.position.y = 0.42;
+  group.add(turretSymbol);
+  addMesh(
+    turretSymbol,
+    new THREE.CylinderGeometry(2.18, 2.42, 0.34, 18),
+    tankMaterial,
+    [0, 0, 0.25],
+    94,
+  );
+  addMesh(turretSymbol, new THREE.BoxGeometry(0.72, 0.3, 5.4), tankMaterial, [0, 0.02, 3.5], 94);
+  addMesh(turretSymbol, new THREE.BoxGeometry(1.18, 0.34, 0.65), tankMaterial, [0, 0.02, 6.25], 94);
+
+  const ring = addMesh(
+    group,
+    new THREE.RingGeometry(9.2, 9.58, 48),
+    ringMaterial,
+    [0, -0.08, 0],
+    88,
+  );
+  ring.rotation.x = -Math.PI / 2;
+
+  group.userData.markerMaterial = tankMaterial;
+  group.userData.colorMaterials = [
+    { material: tankMaterial, opacityScale: 1 },
+    { material: ringMaterial, opacityScale: 0.45 },
+  ];
+  group.userData.turretSymbol = turretSymbol;
   return group;
 }
 
@@ -1708,10 +1762,15 @@ function renderView(entity, x, y, width, height) {
       ? candidate.team === entity.team
       : candidate === entity;
     const color = candidate === entity ? 0xffffff : sameTeam ? 0x39ff88 : 0xff3048;
-    marker.userData.markerMaterial.color.setHex(color);
-    marker.userData.markerMaterial.opacity = Math.min(0.95, blend * 1.2);
-    marker.rotation.y += 0.012;
-    marker.scale.setScalar(1 + Math.sin(performance.now() * 0.004 + candidate.id) * 0.08);
+    const markerOpacity = Math.min(0.95, blend * 1.2);
+    for (const { material, opacityScale } of marker.userData.colorMaterials) {
+      material.color.setHex(color);
+      material.opacity = markerOpacity * opacityScale;
+    }
+    marker.userData.turretSymbol.rotation.y = candidate.turretYaw;
+    marker.rotation.y = 0;
+    const pulseOffset = Number(candidate.id) || 0;
+    marker.scale.setScalar(1 + Math.sin(performance.now() * 0.004 + pulseOffset) * 0.045);
   }
   entity.camera.aspect = width / height;
   entity.camera.updateProjectionMatrix();
