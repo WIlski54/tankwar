@@ -11,20 +11,62 @@
     html,body,#game{width:100%;height:100%;margin:0;overflow:hidden;background:var(--ink)}
     body{font-family:"Segoe UI",Arial,sans-serif;color:#dffbff;letter-spacing:.12em}
     canvas{display:block}
-    .title-screen{position:fixed;inset:0;z-index:20;display:grid;place-items:end center;padding:0 24px clamp(26px,5vh,62px);
-      background:linear-gradient(180deg,transparent 45%,#01020555 70%,#010205f4 100%),
+    .title-screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;
+      padding-top:clamp(270px,47vh,57vh);
+      background:linear-gradient(180deg,transparent 52%,#01020544 78%,#010205cc 100%),
       var(--title-image,url("./assets/ui/panzer-duell-title.png")) center/cover no-repeat}
-    .title-entry{width:min(620px,calc(100vw - 32px));padding:22px 24px;border:1px solid #ffffff26;
-      background:#02050bd9;backdrop-filter:blur(12px);box-shadow:0 0 46px #000,0 0 28px #15e7ff18;
-      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
-    .title-entry label{display:block;margin-bottom:10px;color:#8edce9;font-size:10px}
-    .name-row{display:grid;grid-template-columns:1fr auto;gap:10px}
-    .name-row input{min-width:0;border:1px solid #15e7ff80;background:#06141ae8;color:#fff;padding:16px 18px;
-      font:700 15px "Segoe UI",sans-serif;letter-spacing:.12em;outline:0;text-transform:uppercase}
-    .name-row input:focus{border-color:#dffcff;box-shadow:0 0 22px #15e7ff35}
-    .name-row button{padding-inline:26px}
-    .entry-meta{display:flex;justify-content:space-between;gap:16px;margin-top:10px;color:#617c83;font-size:8px;line-height:1.45}
-    #name-error{color:#ff6378}
+    .title-menu{display:flex;flex-direction:column;gap:4px;width:min(400px,90vw)}
+    .menu-item{position:relative;z-index:0;isolation:isolate;display:block;width:100%;min-height:46px;
+      padding:0 44px;overflow:hidden;border:0;background:#050b12;text-align:center;
+      font:800 13px/1 "Segoe UI",sans-serif;letter-spacing:.24em;text-transform:uppercase;color:#eafaff;
+      text-shadow:0 1px 2px #000,0 0 10px #15e7ff8a;
+      clip-path:polygon(6% 0,94% 0,99% 36%,100% 52%,88% 100%,12% 100%,0 52%,1% 36%);
+      filter:drop-shadow(0 5px 7px #000b) drop-shadow(0 0 7px #15e7ff4f);
+      transition:filter .18s ease,transform .12s ease,color .18s ease}
+    .menu-item::before,.menu-item::after{content:"";position:absolute;z-index:-1;inset:0;
+      background-position:center;background-repeat:no-repeat;background-size:116% 200%;
+      pointer-events:none;transition:opacity .18s ease,filter .18s ease}
+    .menu-item::before{background-image:var(--menu-button-blue,url("./assets/ui/menu-button-blue.png"))}
+    .menu-item::after{background-image:var(--menu-button-red,url("./assets/ui/menu-button-red.png"));opacity:0}
+    .menu-item:hover,.menu-item:focus-visible{color:#fff;outline:0;filter:
+      drop-shadow(0 6px 8px #000c) drop-shadow(0 0 11px #ff3b2f9c);transform:translateY(-1px);box-shadow:none}
+    .menu-item:hover::before,.menu-item:focus-visible::before{filter:brightness(1.14)}
+    .menu-item:hover::after,.menu-item:focus-visible::after{opacity:1}
+    .menu-item:focus-visible{outline:2px solid #e9fbff;outline-offset:3px}
+    .menu-item:active{transform:translateY(1px) scale(.985);filter:
+      drop-shadow(0 2px 4px #000d) drop-shadow(0 0 14px #ff3023c4)}
+    .menu-item.name-item{display:flex;align-items:center;gap:12px;cursor:text;filter:
+      drop-shadow(0 5px 7px #000b) drop-shadow(0 0 9px #ff392d73)}
+    .menu-item.name-item::before{background-image:var(--menu-button-red,url("./assets/ui/menu-button-red.png"))}
+    .menu-item.name-item::after{background-image:var(--menu-button-blue,url("./assets/ui/menu-button-blue.png"))}
+    .menu-item.name-item:focus-within::after{opacity:.78}
+    .menu-item.name-item label{position:relative;color:#ffb35c;font-size:11px;letter-spacing:.24em;
+      cursor:text;text-shadow:0 1px 2px #000,0 0 9px #ff4d36a8}
+    .menu-item.name-item input{flex:1;min-width:0;border:0;background:transparent;color:#fff;outline:0;
+      font:800 14px "Segoe UI",sans-serif;letter-spacing:.2em;text-transform:uppercase;text-align:center;
+      text-shadow:0 1px 2px #000,0 0 10px #15e7ffaa}
+    .menu-item.name-item input::placeholder{color:#63808c;font-weight:700}
+    .menu-item.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px}
+    .menu-item.toggle span{color:#b8d0d9}
+    .menu-item.toggle b{color:#a5f1ff;text-shadow:0 0 9px #15e7ffaa}
+    .name-error{min-height:12px;margin-top:-3px;color:#ff6378;font-size:9px;letter-spacing:.18em;text-align:center}
+    .title-logo-stage{position:absolute;left:50%;bottom:max(4px,env(safe-area-inset-bottom));z-index:2;
+      width:clamp(82px,7vw,106px);height:clamp(56px,5vw,68px);transform:translateX(-50%);
+      pointer-events:none;filter:drop-shadow(0 5px 9px #000d) drop-shadow(0 0 10px #15e7ff5e)}
+    #title-logo-canvas{width:100%;height:100%}
+    .title-bars{position:absolute;left:0;right:0;bottom:max(18px,env(safe-area-inset-bottom));display:flex;
+      justify-content:space-between;padding:0 22px;pointer-events:none}
+    .bar{display:flex;align-items:center;gap:12px;padding:10px 18px;background:#02060bd6;font-size:10px;
+      letter-spacing:.2em;color:#cfeef6;pointer-events:auto;
+      clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,9px 100%,0 50%)}
+    .bar-left{border:1px solid #ff3b3b59}
+    .bar-right{border:1px solid #15e7ff59}
+    .online-dot{width:8px;height:8px;border-radius:50%;background:#ff4b3b;box-shadow:0 0 9px #ff4b3b;
+      animation:pulse 1.4s infinite alternate}
+    .bar-toggle{padding:4px 12px;border:1px solid #ffffff36;background:#0a141cd9;color:#bfe8f2;
+      font:700 9px "Segoe UI",sans-serif;letter-spacing:.2em}
+    .bar-toggle:hover{border-color:#ffa245;color:#fff;box-shadow:none;transform:none}
+    .pilot-star{color:#15e7ff;text-shadow:0 0 10px #15e7ff}
     .overlay{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:
       radial-gradient(circle at 50% 38%,#0b354055,transparent 36%),
       linear-gradient(180deg,#010205dd,#010205f7)}
@@ -35,12 +77,6 @@
     h1{font-size:clamp(42px,9vw,92px);line-height:.8;margin:0;font-weight:900;font-style:italic;
       letter-spacing:-.055em;text-shadow:0 0 28px #15e7ff70}
     h1 span{display:block;color:transparent;-webkit-text-stroke:1px var(--cyan);font-size:.55em;letter-spacing:.18em;margin-top:18px}
-    .intro{max-width:560px;color:#9ab7bd;font-size:13px;line-height:1.8;letter-spacing:.04em;margin:32px 0}
-    .section-label{margin:20px 0 10px;color:#67868d;font-size:9px;letter-spacing:.18em}
-    .platforms{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
-    .platforms button{padding:14px 16px}
-    .platforms button.active{border-color:#dffcff;background:#0b2730;box-shadow:0 0 20px #15e7ff28,inset 0 0 20px #15e7ff12}
-    .platforms button.active.magenta{border-color:#ff80e8;background:#2c0b29;box-shadow:0 0 20px #ff2bd628,inset 0 0 20px #ff2bd612}
     .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
     button{cursor:pointer;border:1px solid #15e7ff80;background:#06141a;color:#eaffff;padding:18px;text-align:left;
       font:700 13px/1 "Segoe UI",sans-serif;letter-spacing:.12em;transition:.18s}
@@ -48,11 +84,6 @@
     button.magenta{border-color:#ff2bd688;background:#190718}
     button.magenta:hover{background:#310c2d;box-shadow:0 0 24px #ff2bd630}
     button small{display:block;color:#718d93;margin-top:10px;font-weight:400;letter-spacing:.04em;line-height:1.35}
-    .menu-head{display:flex;align-items:center;justify-content:space-between;gap:18px}
-    .pilot-badge{color:#92b8bf;font-size:9px;text-align:right;line-height:1.7}
-    .pilot-badge strong{display:block;color:#fff;font-size:12px}
-    .text-button{padding:8px 0;border:0;background:transparent;color:#5d8e98;font-size:8px;text-align:right}
-    .text-button:hover{background:transparent;box-shadow:none;color:var(--cyan);transform:none}
     .lobby-panel{width:min(860px,calc(100vw - 40px))}
     .lobby-panel h2{margin:0 0 10px;font-size:clamp(28px,5vw,52px);letter-spacing:-.035em}
     .lobby-status{margin:24px 0;padding:14px 16px;border-left:2px solid var(--cyan);background:#08161db5;
@@ -132,11 +163,17 @@
     #result-title{font-size:42px;color:var(--cyan);text-shadow:0 0 28px var(--cyan);margin:0 0 30px}
     #result .modes{grid-template-columns:1fr 1fr}
     @media(max-width:760px){.panel{padding:28px}.modes{grid-template-columns:1fr}.controls{display:none}
-      .title-screen{padding-bottom:20px}.title-entry{padding:16px}.name-row{grid-template-columns:1fr}.entry-meta{display:none}
+      .title-screen{padding-top:clamp(240px,39vh,360px);padding-bottom:84px;overflow-y:auto}
+      .title-menu{width:min(390px,94vw);gap:3px}.menu-item{min-height:46px;padding-inline:38px;font-size:12px}
+      .title-logo-stage{position:fixed;width:76px;height:52px}
+      .title-bars{position:fixed;padding-inline:10px}.bar{gap:8px;padding:8px 11px;font-size:8px}
       .menu-head{align-items:flex-start}.team-grid{grid-template-columns:1fr}.versus{min-height:18px}.lobby-foot{align-items:stretch;flex-direction:column}
       .player-hud{top:12px;width:210px;padding:9px 11px}#p1-hud{left:10px}#p2-hud{right:10px}
       .touch-pad{width:126px;height:126px}.touch-pad:before{top:62px}.touch-pad:after{left:62px}
       #aim-pad{right:110px}}
+    @media(max-height:700px){.title-screen{padding-top:clamp(230px,42vh,292px)}
+      .title-menu{gap:2px}.menu-item{min-height:42px}.name-error{min-height:9px}}
+    @media(prefers-reduced-motion:reduce){.menu-item,.menu-item::before,.menu-item::after{transition:none}}
   </style>
   <script type="importmap">
   {"imports":{
@@ -148,17 +185,33 @@
 <body>
   <div id="game"></div>
   <section id="title-screen" class="title-screen" aria-label="Panzer Duell Startbildschirm">
-    <div class="title-entry">
-      <label for="player-name">PILOTEN-ID // DEIN NAME</label>
-      <div class="name-row">
-        <input id="player-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="NAME EINGEBEN">
-        <button id="enter-grid">GRID BETRETEN</button>
+    <nav class="title-menu" id="title-menu">
+      <div class="menu-item name-item" id="name-item">
+        <label for="player-name" data-i18n="title.pilot">PILOT</label>
+        <input id="player-name" maxlength="16" autocomplete="nickname" spellcheck="false"
+          data-i18n-placeholder="title.namePlaceholder" placeholder="NAME EINGEBEN">
       </div>
-      <div class="entry-meta">
-        <span id="name-error">2–16 ZEICHEN</span>
-        <span>TITELMUSIK STARTET BEI DER EINGABE</span>
-      </div>
+      <div id="name-error" class="name-error"></div>
+      <button class="menu-item" data-mode="ai" data-i18n="title.single">SINGLEPLAYER</button>
+      <button class="menu-item" data-mode="local" data-i18n="title.two">2 SPIELER</button>
+      <button class="menu-item" data-mode="group" data-i18n="title.multi">MULTIPLAYER</button>
+      <button class="menu-item toggle" id="language-button">
+        <span data-i18n="title.language">SPRACHE</span><b id="language-value">DEUTSCH</b>
+      </button>
+      <button class="menu-item toggle" id="difficulty-button">
+        <span data-i18n="title.difficulty">SCHWIERIGKEIT</span><b id="difficulty-value">MITTEL</b>
+      </button>
+    </nav>
+    <div id="title-logo-stage" class="title-logo-stage" aria-hidden="true">
+      <canvas id="title-logo-canvas"></canvas>
     </div>
+    <footer class="title-bars">
+      <div class="bar bar-left">
+        <i class="online-dot"></i><span data-i18n="title.online">ONLINE</span>
+        <button id="platform-toggle" class="bar-toggle">PC</button>
+      </div>
+      <div class="bar bar-right"><span id="title-pilot">—</span><b class="pilot-star">✦</b></div>
+    </footer>
   </section>
   <div id="hud">
     <div id="mode-label"></div>
@@ -170,51 +223,21 @@
     <div id="satellite-overlay"></div>
   </div>
   <div id="touch-controls" class="hidden">
-    <div id="drive-pad" class="touch-pad"><div class="touch-stick"></div><label>FAHREN</label></div>
-    <div id="aim-pad" class="touch-pad"><div class="touch-stick"></div><label>TURM / ROHR</label></div>
-    <button id="touch-fire">FEUER</button>
-  </div>
-  <div id="menu" class="overlay hidden">
-    <main class="panel">
-      <div class="menu-head">
-        <div>
-          <div class="eyebrow">GRID ONLINE // SECTOR 07</div>
-          <h1>PANZER<span>DUELL</span></h1>
-        </div>
-        <div class="pilot-badge">PILOT ONLINE<strong id="pilot-label">UNBEKANNT</strong>
-          <button id="change-pilot" class="text-button">PILOT ÄNDERN</button>
-        </div>
-      </div>
-      <p class="intro">Drei Leben, zehn Schuss und neun mächtige Extras. Nutzt Minen, Satellitensicht, Mauerbrecher und vier Randportale, um das riesige Neon-Labyrinth zu beherrschen.</p>
-      <div class="section-label">01 // PLATTFORM WÄHLEN</div>
-      <div class="platforms">
-        <button class="active" data-platform="desktop">PC / MAC<small>Tastatur und präzise Maussteuerung.</small></button>
-        <button class="magenta" data-platform="tablet">IPAD / TOUCH <b>NEU</b><small>Tastatur ohne Maus oder vollständige Touchsteuerung.</small></button>
-      </div>
-      <div class="section-label">02 // SPIELMODUS WÄHLEN</div>
-      <div class="modes">
-        <button data-mode="ai">SINGLEPLAYER<small id="solo-mode-description">Du gegen die taktische CORE AI. Maussteuerung für den Turm.</small></button>
-        <button class="magenta" data-mode="local">SPIELER VS. SPIELER<small>Lokales Duell für zwei Spieler mit geteilter Third-Person-Ansicht.</small></button>
-        <button data-mode="group">MULTIPLAYER / GRUPPE<small>Vier Piloten in zwei Teams. Bei drei Spielern ergänzt die CORE AI das Match.</small></button>
-      </div>
-      <div id="control-hints" class="controls">
-        <span>SOLO<br>WASD · MAUS · KLICK · M MINE · U SAT</span>
-        <span>SPIELER 1<br>WASD · Q/E · R/F · LEERTASTE · M · U</span>
-        <span>SPIELER 2<br>PFEILE · ,/. · NUM 8/2 · ENTER · NUM 5/7</span>
-      </div>
-    </main>
+    <div id="drive-pad" class="touch-pad"><div class="touch-stick"></div><label data-i18n="touch.drive">FAHREN</label></div>
+    <div id="aim-pad" class="touch-pad"><div class="touch-stick"></div><label data-i18n="touch.aim">TURM / ROHR</label></div>
+    <button id="touch-fire" data-i18n="touch.fire">FEUER</button>
   </div>
   <div id="group-lobby" class="overlay hidden">
     <main class="panel lobby-panel">
-      <div class="eyebrow">MULTIPLAYER // GROUP LINK</div>
-      <h2>TEAM-LOBBY</h2>
+      <div class="eyebrow" data-i18n="lobby.eyebrow">MULTIPLAYER // GROUP LINK</div>
+      <h2 data-i18n="lobby.heading">TEAM-LOBBY</h2>
       <div id="lobby-status" class="lobby-status">SERVERVERBINDUNG WIRD VORBEREITET</div>
       <div class="team-grid">
         <section class="team">
           <h3>TEAM ALPHA</h3>
           <div id="team-alpha"></div>
         </section>
-        <div class="versus">VS</div>
+        <div class="versus" data-i18n="lobby.vs">VS</div>
         <section class="team omega">
           <h3>TEAM OMEGA</h3>
           <div id="team-omega"></div>
@@ -222,21 +245,21 @@
       </div>
       <div class="lobby-foot">
         <div id="server-note" class="server-note"></div>
-        <button id="leave-lobby" class="magenta">LOBBY VERLASSEN</button>
+        <button id="leave-lobby" class="magenta" data-i18n="lobby.leave">LOBBY VERLASSEN</button>
       </div>
     </main>
   </div>
   <div id="loading" class="overlay hidden">GRID WIRD SYNCHRONISIERT …<br><small>TANK-ASSET WIRD GELADEN</small></div>
   <div id="result" class="overlay hidden">
     <main class="panel">
-      <div class="eyebrow">MATCH COMPLETE</div>
+      <div class="eyebrow" data-i18n="result.complete">MATCH COMPLETE</div>
       <h2 id="result-title">BLUE WINS</h2>
       <div class="modes">
-        <button id="play-again">RE-MATCH</button>
-        <button id="back-menu" class="magenta">MODE SELECT</button>
+        <button id="play-again" data-i18n="result.again">REVANCHE</button>
+        <button id="back-menu" class="magenta" data-i18n="result.menu">ZURÜCK ZUM MENÜ</button>
       </div>
     </main>
   </div>
-  <script type="module" src="./game/main.js?v=20260701-satellite-crate1"></script>
+  <script type="module" src="./game/main.js?v=20260702-wk-logo1"></script>
 </body>
 </html>

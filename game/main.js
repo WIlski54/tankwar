@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   buildArena,
   destroyWall,
@@ -68,6 +69,7 @@ import {
 } from "./effects.js?v=20260630-performance2";
 import { NetworkClient } from "./network-client.js?v=20260630-network1";
 import { assetUrl } from "./asset-url.js?v=20260630-deploy1";
+import { applyStaticTexts, t, toggleLanguage } from "./i18n.js?v=20260702-title1";
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -126,12 +128,16 @@ const mineSensorMaterial = new THREE.MeshBasicMaterial({
 
 const ui = {
   title: document.getElementById("title-screen"),
+  titleLogoStage: document.getElementById("title-logo-stage"),
+  titleLogoCanvas: document.getElementById("title-logo-canvas"),
   playerName: document.getElementById("player-name"),
   nameError: document.getElementById("name-error"),
-  enterGrid: document.getElementById("enter-grid"),
-  pilotLabel: document.getElementById("pilot-label"),
-  changePilot: document.getElementById("change-pilot"),
-  menu: document.getElementById("menu"),
+  languageValue: document.getElementById("language-value"),
+  languageButton: document.getElementById("language-button"),
+  difficultyValue: document.getElementById("difficulty-value"),
+  difficultyButton: document.getElementById("difficulty-button"),
+  platformToggle: document.getElementById("platform-toggle"),
+  titlePilot: document.getElementById("title-pilot"),
   lobby: document.getElementById("group-lobby"),
   lobbyStatus: document.getElementById("lobby-status"),
   teamAlpha: document.getElementById("team-alpha"),
@@ -152,12 +158,60 @@ const ui = {
   drivePad: document.getElementById("drive-pad"),
   aimPad: document.getElementById("aim-pad"),
   touchFire: document.getElementById("touch-fire"),
-  controlHints: document.getElementById("control-hints"),
-  soloModeDescription: document.getElementById("solo-mode-description"),
 };
 ui.title.style.setProperty(
   "--title-image",
   `url("${assetUrl("./assets/ui/panzer-duell-title.png")}")`,
+);
+ui.title.style.setProperty(
+  "--menu-button-red",
+  `url("${assetUrl("./assets/ui/menu-button-red.png")}")`,
+);
+ui.title.style.setProperty(
+  "--menu-button-blue",
+  `url("${assetUrl("./assets/ui/menu-button-blue.png")}")`,
+);
+
+const titleLogoScene = new THREE.Scene();
+const titleLogoCamera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
+titleLogoCamera.position.set(0, 0.05, 3.05);
+titleLogoCamera.lookAt(0, 0, 0);
+const titleLogoRenderer = new THREE.WebGLRenderer({
+  canvas: ui.titleLogoCanvas,
+  alpha: true,
+  antialias: true,
+  powerPreference: "low-power",
+});
+titleLogoRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+titleLogoRenderer.setClearColor(0x000000, 0);
+titleLogoRenderer.outputColorSpace = THREE.SRGBColorSpace;
+titleLogoRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+titleLogoRenderer.toneMappingExposure = 1.35;
+titleLogoScene.add(new THREE.HemisphereLight(0xa9f7ff, 0x08020b, 2.2));
+const titleLogoKeyLight = new THREE.DirectionalLight(0xbff8ff, 4.2);
+titleLogoKeyLight.position.set(-3, 4, 5);
+titleLogoScene.add(titleLogoKeyLight);
+const titleLogoRimLight = new THREE.DirectionalLight(0xff2d3f, 3.4);
+titleLogoRimLight.position.set(4, 1, -3);
+titleLogoScene.add(titleLogoRimLight);
+let titleLogoRoot = null;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+new GLTFLoader().load(
+  assetUrl("./assets/ui/wk-logo.glb"),
+  ({ scene: logo }) => {
+    const bounds = new THREE.Box3().setFromObject(logo);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const size = bounds.getSize(new THREE.Vector3());
+    logo.position.sub(center);
+    logo.scale.setScalar(2.6 / Math.max(size.x, size.y, size.z, 0.001));
+    logo.rotation.x = -0.08;
+    titleLogoScene.add(logo);
+    titleLogoRoot = logo;
+    resizeTitleLogo();
+  },
+  undefined,
+  (error) => console.warn("WK-Titellogo konnte nicht geladen werden.", error),
 );
 
 const keys = new Set();
@@ -167,8 +221,25 @@ const mouse = new THREE.Vector2();
 let mouseFire = false;
 let soloPitchInput = "mouse";
 let mode = null;
-let platform = "desktop";
+let platform = navigator.maxTouchPoints > 0 && matchMedia("(pointer:coarse)").matches
+  ? "tablet"
+  : "desktop";
 let playerName = "";
+const DIFFICULTIES = ["easy", "medium", "hard"];
+// CORE AI tuning per difficulty: turret tracking speed, engagement range,
+// aim gate, obstacle reaction time, fire cadence and drive speed.
+const AI_PROFILES = {
+  easy: { turretRate: 1.7, fireRange: 58, aimTolerance: 0.2, reactionDelay: 1.05, cooldownScale: 1.5, speedScale: 0.85 },
+  medium: { turretRate: 2.6, fireRange: 82, aimTolerance: 0.12, reactionDelay: 0.65, cooldownScale: 1, speedScale: 1 },
+  hard: { turretRate: 3.6, fireRange: 110, aimTolerance: 0.07, reactionDelay: 0.4, cooldownScale: 0.72, speedScale: 1.08 },
+};
+let difficulty = "medium";
+try {
+  const storedDifficulty = localStorage.getItem("panzer-duell.difficulty");
+  if (DIFFICULTIES.includes(storedDifficulty)) difficulty = storedDifficulty;
+} catch {
+  // Preference simply won't persist.
+}
 let lobbyRoster = [];
 let networkPlayerId = null;
 let latestNetworkSnapshot = null;
@@ -260,6 +331,7 @@ addEventListener("resize", resize);
 
 document.querySelectorAll("[data-mode]").forEach((button) => {
   button.addEventListener("click", () => {
+    if (!commitName()) return;
     gameAudio.unlock();
     if (button.dataset.mode === "group") {
       showGroupLobby();
@@ -268,8 +340,24 @@ document.querySelectorAll("[data-mode]").forEach((button) => {
     startMatch(button.dataset.mode);
   });
 });
-document.querySelectorAll("[data-platform]").forEach((button) => {
-  button.addEventListener("click", () => selectPlatform(button.dataset.platform));
+ui.languageButton.addEventListener("click", () => {
+  titleMusic.play();
+  toggleLanguage();
+  refreshMenuLabels();
+});
+ui.difficultyButton.addEventListener("click", () => {
+  titleMusic.play();
+  difficulty = DIFFICULTIES[(DIFFICULTIES.indexOf(difficulty) + 1) % DIFFICULTIES.length];
+  try {
+    localStorage.setItem("panzer-duell.difficulty", difficulty);
+  } catch {
+    // Preference simply won't persist.
+  }
+  refreshMenuLabels();
+});
+ui.platformToggle.addEventListener("click", () => {
+  titleMusic.play();
+  selectPlatform(platform === "desktop" ? "tablet" : "desktop");
 });
 document.getElementById("play-again").addEventListener("click", () => {
   if (mode === "network") {
@@ -281,16 +369,11 @@ document.getElementById("play-again").addEventListener("click", () => {
   startMatch(mode);
 });
 document.getElementById("back-menu").addEventListener("click", showMenu);
-ui.enterGrid.addEventListener("click", enterGrid);
-ui.playerName.addEventListener("focus", () => titleMusic.play());
+ui.title.addEventListener("pointerdown", () => titleMusic.play());
 ui.playerName.addEventListener("input", () => {
-  titleMusic.play();
-  ui.nameError.textContent = "2–16 ZEICHEN";
+  ui.nameError.textContent = "";
+  commitName(false);
 });
-ui.playerName.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") enterGrid();
-});
-ui.changePilot.addEventListener("click", showTitle);
 ui.leaveLobby.addEventListener("click", () => {
   networkClient.leave();
   showMenu();
@@ -301,6 +384,9 @@ try {
 } catch {
   // Storage can be unavailable in hardened/private browser contexts.
 }
+commitName(false);
+applyStaticTexts();
+refreshMenuLabels();
 
 window.PanzerDuellLobby = Object.freeze({
   updatePlayers(players) {
@@ -317,33 +403,37 @@ window.PanzerDuellLobby = Object.freeze({
   },
 });
 
-function enterGrid() {
+function commitName(strict = true) {
   const candidate = ui.playerName.value.trim().replace(/\s+/g, " ");
   if (candidate.length < 2) {
-    ui.nameError.textContent = "NAME IST ZU KURZ";
-    ui.playerName.focus();
-    return;
+    if (strict) {
+      ui.nameError.textContent = t("title.nameShort");
+      ui.playerName.focus();
+    }
+    return false;
   }
-
   playerName = candidate.slice(0, 16).toUpperCase();
-  ui.playerName.value = playerName;
-  ui.pilotLabel.textContent = playerName;
+  ui.titlePilot.textContent = playerName;
   try {
     localStorage.setItem("panzer-duell.player-name", playerName);
   } catch {
     // The player name still works for this session.
   }
-  titleMusic.play();
-  ui.title.classList.add("hidden");
-  ui.lobby.classList.add("hidden");
-  ui.menu.classList.remove("hidden");
+  return true;
+}
+
+// The title screen IS the menu now: language, difficulty and platform values live on it.
+function refreshMenuLabels() {
+  ui.languageValue.textContent = t("title.languageValue");
+  ui.difficultyValue.textContent = t(`difficulty.${difficulty}`);
+  ui.platformToggle.textContent = t(`platform.${platform}`);
 }
 
 function showTitle() {
-  ui.menu.classList.add("hidden");
   ui.lobby.classList.add("hidden");
+  ui.result.classList.add("hidden");
   ui.title.classList.remove("hidden");
-  ui.playerName.focus();
+  refreshMenuLabels();
   titleMusic.play();
 }
 
@@ -351,13 +441,12 @@ function showGroupLobby() {
   running = false;
   matchOver = false;
   clearWorld();
-  ui.menu.classList.add("hidden");
   ui.title.classList.add("hidden");
   ui.result.classList.add("hidden");
   ui.lobby.classList.remove("hidden");
   lobbyRoster = [{ id: "local-player", name: playerName, isLocal: true }];
   renderLobby();
-  ui.lobbyStatus.textContent = "VERBINDE MIT DEM MATCH-SERVER …";
+  ui.lobbyStatus.textContent = t("lobby.connecting");
   networkClient.join(playerName);
 }
 
@@ -370,20 +459,18 @@ function renderLobby() {
   if (assignment.status === "waiting") {
     alpha = assignment.waiting.filter((_, index) => index % 2 === 0);
     omega = assignment.waiting.filter((_, index) => index % 2 === 1);
-    ui.lobbyStatus.textContent = `WARTE AUF ${assignment.requiredPlayers} WEITERE${
-      assignment.requiredPlayers === 1 ? "N" : ""
-    } PILOTEN // AB 3 SPIELERN IST DAS MATCH BEREIT`;
+    ui.lobbyStatus.textContent = t("lobby.waiting", { count: assignment.requiredPlayers });
   } else {
     ui.lobbyStatus.textContent = assignment.botAdded
-      ? "MATCH BEREIT // 3 PILOTEN + CORE AI // 2 GEGEN 2"
-      : "MATCH BEREIT // 4 PILOTEN // 2 GEGEN 2";
+      ? t("lobby.readyBot")
+      : t("lobby.readyFull");
   }
 
   renderTeam(ui.teamAlpha, alpha);
   renderTeam(ui.teamOmega, omega);
   ui.serverNote.textContent = assignment.bench.length
-    ? `${assignment.bench.length} weitere Piloten warten serverseitig auf das nächste Team-Match.`
-    : "Live-Server verbunden: Eingaben gehen an den Server; Bewegung, Treffer, Extras und Siegerentscheidung werden autoritativ synchronisiert.";
+    ? t("lobby.bench", { count: assignment.bench.length })
+    : t("lobby.serverLive");
 }
 
 function renderTeam(container, members) {
@@ -393,9 +480,11 @@ function renderTeam(container, members) {
     const slot = document.createElement("div");
     slot.className = `team-slot${player ? "" : " empty"}`;
     const label = document.createElement("span");
-    label.textContent = player?.name ?? "PLATZ FREI";
+    label.textContent = player?.name ?? t("lobby.slotFree");
     const type = document.createElement("b");
-    type.textContent = player?.isBot ? "CORE AI" : player?.isLocal ? "DU" : player ? "ONLINE" : "WAITING";
+    type.textContent = player?.isBot
+      ? "CORE AI"
+      : player?.isLocal ? t("lobby.you") : player ? t("lobby.onlineTag") : t("lobby.waitingTag");
     slot.append(label, type);
     container.append(slot);
   }
@@ -403,14 +492,10 @@ function renderTeam(container, members) {
 
 function handleNetworkStatus(status) {
   if (ui.lobby.classList.contains("hidden")) return;
-  const labels = {
-    connecting: "VERBINDE MIT DEM MATCH-SERVER …",
-    connected: "SERVER VERBUNDEN // LOBBY WIRD SYNCHRONISIERT",
-    reconnecting: "VERBINDUNG UNTERBROCHEN // NEUER VERSUCH …",
-    error: "SERVER NICHT ERREICHBAR // NEUER VERSUCH LÄUFT",
-    disconnected: "SERVERVERBINDUNG GETRENNT",
-  };
-  ui.lobbyStatus.textContent = labels[status] ?? status.toUpperCase();
+  const known = ["connecting", "connected", "reconnecting", "error", "disconnected"];
+  ui.lobbyStatus.textContent = known.includes(status)
+    ? t(`lobby.${status}`)
+    : status.toUpperCase();
 }
 
 function handleNetworkLobby(message) {
@@ -446,6 +531,22 @@ for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) {
 
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
+  resizeTitleLogo();
+}
+
+function resizeTitleLogo() {
+  const bounds = ui.titleLogoStage.getBoundingClientRect();
+  const width = Math.max(1, Math.round(bounds.width));
+  const height = Math.max(1, Math.round(bounds.height));
+  titleLogoRenderer.setSize(width, height, false);
+  titleLogoCamera.aspect = width / height;
+  titleLogoCamera.updateProjectionMatrix();
+}
+
+function renderTitleLogo(dt, now) {
+  if (!titleLogoRoot || ui.title.classList.contains("hidden")) return;
+  if (!reducedMotion.matches) titleLogoRoot.rotation.y = now * 0.32;
+  titleLogoRenderer.render(titleLogoScene, titleLogoCamera);
 }
 
 function bindTouchPad(pad, onInput) {
@@ -485,16 +586,8 @@ function bindTouchPad(pad, onInput) {
 }
 
 function selectPlatform(selectedPlatform) {
-  platform = selectedPlatform;
-  document.querySelectorAll("[data-platform]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.platform === platform);
-  });
-  ui.controlHints.innerHTML = platform === "tablet"
-    ? "<span>IPAD SOLO<br>WASD · PFEILE · LEERTASTE · M · U</span><span>TOUCH LINKS<br>FAHREN / LENKEN</span><span>TOUCH RECHTS<br>ZIELEN · FEUER</span>"
-    : "<span>SOLO<br>WASD · MAUS · KLICK · M · U</span><span>SPIELER 1<br>WASD · Q/E · R/F · LEERTASTE · M · U</span><span>SPIELER 2<br>PFEILE · ,/. · NUM 8/2 · ENTER · NUM 5/7</span>";
-  ui.soloModeDescription.textContent = platform === "tablet"
-    ? "Du gegen die CORE AI. Tastatur ohne Maus oder vollständige Touchsteuerung."
-    : "Du gegen die taktische CORE AI. Maussteuerung für den Turm.";
+  platform = selectedPlatform === "tablet" ? "tablet" : "desktop";
+  refreshMenuLabels();
 }
 
 function makeShield() {
@@ -724,13 +817,14 @@ async function startMatch(selectedMode) {
   matchOver = false;
   clearWorld();
   ui.title.classList.add("hidden");
-  ui.menu.classList.add("hidden");
   ui.lobby.classList.add("hidden");
   ui.result.classList.add("hidden");
+  ui.loading.innerHTML = `${t("loading.sync")}<br><small>${t("loading.asset")}</small>`;
   ui.loading.classList.remove("hidden");
-  ui.mode.textContent = `${platform === "tablet" ? "IPAD TOUCH" : "PC / MAC"} // ${
-    mode === "ai" ? "SOLO // CORE AI" : "LOCAL // SPLIT LINK"
-  }`;
+  const platformTag = t(platform === "tablet" ? "mode.platformTablet" : "mode.platformDesktop");
+  ui.mode.textContent = mode === "ai"
+    ? `${platformTag} // ${t("mode.solo")} // ${t(`difficulty.${difficulty}`)}`
+    : `${platformTag} // ${t("mode.local")}`;
   ui.p2.classList.remove("hidden");
   ui.divider.classList.toggle("hidden", mode !== "local");
   ui.crosshair.classList.toggle("hidden", mode !== "ai");
@@ -742,6 +836,12 @@ async function startMatch(selectedMode) {
       createEntity(1, mode === "ai" ? "ai" : "human", ACTIVE_MATCH_TANK_IDS[1]),
     ]);
     entities[0].name = playerName || entities[0].name;
+    if (mode === "ai") {
+      const profile = AI_PROFILES[difficulty];
+      entities[1].aiProfile = profile;
+      entities[1].drive.maxSpeed *= profile.speedScale;
+      entities[1].weapon.cooldown *= profile.cooldownScale;
+    }
     powerups = await loadPowerups(scene, "local");
     resetMatch();
     if (PERFORMANCE_TEST_MODE) {
@@ -758,10 +858,10 @@ async function startMatch(selectedMode) {
     running = true;
     clock.getDelta();
     ui.loading.classList.add("hidden");
-    announce("ENGAGE", 900);
+    announce(t("announce.engage"), 900);
   } catch (error) {
     console.error(error);
-    ui.loading.innerHTML = "ASSET-LINK FEHLER<br><small>Bitte über start_server.bat starten.</small>";
+    ui.loading.innerHTML = t("loading.assetError");
   }
 }
 
@@ -780,11 +880,11 @@ async function startNetworkMatch(message) {
   restoreWalls();
   titleMusic.fadeOut();
   ui.title.classList.add("hidden");
-  ui.menu.classList.add("hidden");
   ui.lobby.classList.add("hidden");
   ui.result.classList.add("hidden");
+  ui.loading.innerHTML = `${t("loading.sync")}<br><small>${t("loading.asset")}</small>`;
   ui.loading.classList.remove("hidden");
-  ui.mode.textContent = `ONLINE // TEAM ${message.team.toUpperCase()} // SERVER AUTHORITATIVE`;
+  ui.mode.textContent = t("mode.online", { team: message.team.toUpperCase() });
   ui.p2.classList.remove("hidden");
   ui.divider.classList.add("hidden");
   ui.crosshair.classList.toggle("hidden", platform !== "desktop");
@@ -810,10 +910,10 @@ async function startNetworkMatch(message) {
     running = true;
     clock.getDelta();
     ui.loading.classList.add("hidden");
-    announce(`TEAM ${message.team.toUpperCase()} // ENGAGE`, 1100);
+    announce(t("announce.teamEngage", { team: message.team.toUpperCase() }), 1100);
   } catch (error) {
     console.error(error);
-    ui.loading.innerHTML = "NETZWERK-MATCH KONNTE NICHT GELADEN WERDEN";
+    ui.loading.innerHTML = t("loading.networkError");
   }
 }
 
@@ -917,7 +1017,7 @@ function updateNetworkMatch(dt, now) {
     matchOver = true;
     running = false;
     setTimeout(() => {
-      ui.resultTitle.textContent = `TEAM ${snapshot.winner.toUpperCase()} WINS`;
+      ui.resultTitle.textContent = t("result.teamWins", { team: snapshot.winner.toUpperCase() });
       ui.result.classList.remove("hidden");
     }, 700);
   }
@@ -1003,16 +1103,24 @@ function processNetworkEvents(events) {
       if (wall) shatterWall(wall, position);
     } else if (event.type === "pickup") {
       const entity = entities.find((candidate) => candidate.networkId === event.playerId);
-      const label = POWERUP_TYPES[event.powerupType]?.label ?? event.powerupType.toUpperCase();
+      const label = t(
+        `powerup.${event.powerupType}`,
+        {},
+        POWERUP_TYPES[event.powerupType]?.label ?? event.powerupType.toUpperCase(),
+      );
       announce(`${entity?.name ?? "PILOT"} // ${label}`, 900);
       burst(position, POWERUP_TYPES[event.powerupType]?.color ?? CYAN, 30, 14);
     } else if (event.type === "portal") {
       const entity = entities.find((candidate) => candidate.networkId === event.playerId);
-      announce(`${entity?.name ?? "PILOT"} // ${event.entry.toUpperCase()} → ${event.exit.toUpperCase()}`, 800);
+      announce(t("announce.portal", {
+        name: entity?.name ?? "PILOT",
+        entry: event.entry.toUpperCase(),
+        exit: event.exit.toUpperCase(),
+      }), 800);
     } else if (event.type === "satellite" && event.playerId === networkPlayerId) {
-      announce("ORBITALER UPLINK // LIVE", 1000);
+      announce(t("announce.uplinkLive"), 1000);
     } else if (event.type === "disconnect") {
-      announce(`${event.name} ÜBERNIMMT`, 1100);
+      announce(t("announce.takeover", { name: event.name }), 1100);
     }
   }
 }
@@ -1088,7 +1196,7 @@ function respawn(entity) {
   entity.group.visible = true;
   if (PERFORMANCE_TEST_MODE) placePerformanceCombatant(entity);
   updateHud();
-  announce(`${entity.name} // NEUES LEBEN`, 850);
+  announce(t("announce.newLife", { name: entity.name }), 850);
 }
 
 function placePerformanceCombatant(entity) {
@@ -1172,9 +1280,10 @@ function aiInput(entity, enemy, now) {
     queryWallsForSegment(entity.group.position, ahead, 3.1),
     3.1,
   );
+  const aiProfile = entity.aiProfile ?? AI_PROFILES.medium;
   if (blockedAhead && now >= entity.aiDecisionAt) {
     entity.aiSteerBias *= -1;
-    entity.aiDecisionAt = now + 0.65;
+    entity.aiDecisionAt = now + aiProfile.reactionDelay;
   }
   if (blockedAhead) headingError = entity.aiSteerBias * 1.4;
   const lineBlocked = segmentHitsWall(
@@ -1201,7 +1310,7 @@ function aiInput(entity, enemy, now) {
     steer: Math.max(-1, Math.min(1, headingError * 1.8)),
     targetTurret: wrapAngle(targetHeading - entity.drive.heading),
     targetPitch: 0,
-    fire: distance < 82 && (!lineBlocked || entity.wallBreakerShots > 0),
+    fire: distance < aiProfile.fireRange && (!lineBlocked || entity.wallBreakerShots > 0),
     mine: deployMineNow,
   };
 }
@@ -1221,7 +1330,7 @@ function updateEntity(entity, enemy, dt, now) {
   const input = entity.type === "ai" ? aiInput(entity, enemy, now) : humanInput(entity);
   if (input.mine) deployMine(entity, now);
   if (input.satellite && activateSatelliteView(entity, now)) {
-    announce(`${entity.name} // ORBITALER UPLINK`, 900);
+    announce(t("announce.uplink", { name: entity.name }), 900);
     updateHud(now);
   }
   const state = entity.drive.update(dt, input.throttle, input.steer);
@@ -1279,7 +1388,8 @@ function updateEntity(entity, enemy, dt, now) {
       );
     }
   } else if (entity.type === "ai") {
-    entity.turretYaw = approachAngle(entity.turretYaw, input.targetTurret, dt * 2.6);
+    const aiProfile = entity.aiProfile ?? AI_PROFILES.medium;
+    entity.turretYaw = approachAngle(entity.turretYaw, input.targetTurret, dt * aiProfile.turretRate);
     entity.barrelPitch += THREE.MathUtils.clamp(
       input.targetPitch - entity.barrelPitch,
       -dt * 0.5,
@@ -1298,7 +1408,10 @@ function updateEntity(entity, enemy, dt, now) {
 
   const aimError = entity.type === "ai"
     ? Math.abs(wrapAngle(input.targetTurret - entity.turretYaw)) : 0;
-  if (input.fire && aimError < 0.12) fire(entity, now);
+  const aimGate = entity.type === "ai"
+    ? (entity.aiProfile ?? AI_PROFILES.medium).aimTolerance
+    : Infinity;
+  if (input.fire && aimError < aimGate) fire(entity, now);
 }
 
 function updatePortalTraversal(entity, now) {
@@ -1315,7 +1428,11 @@ function updatePortalTraversal(entity, now) {
   entity.portalReadyAt = now + 1.2;
   burst(entity.group.position.clone().setY(3.2), exit.color, 48, 21);
   gameAudio.explosion(0.42);
-  announce(`${entity.name} // ${entry.id.toUpperCase()} → ${exit.id.toUpperCase()}`, 850);
+  announce(t("announce.portal", {
+    name: entity.name,
+    entry: entry.id.toUpperCase(),
+    exit: exit.id.toUpperCase(),
+  }), 850);
 }
 
 function animatePortals(dt, now) {
@@ -1334,7 +1451,7 @@ function fire(entity, now) {
   if (entity.ammo <= 0) {
     if (now >= entity.emptyNoticeAt) {
       entity.emptyNoticeAt = now + 1.2;
-      announce(`${entity.name} // MUNITION LEER`, 700);
+      announce(t("announce.ammoEmpty", { name: entity.name }), 700);
     }
     return;
   }
@@ -1375,7 +1492,7 @@ function deployMine(entity, now) {
   if (entity.mines <= 0) return;
   const deployedCount = mines.filter((mine) => mine.owner === entity).length;
   if (deployedCount >= MAX_DEPLOYED_MINES_PER_PLAYER) {
-    announce(`${entity.name} // MAXIMAL ${MAX_DEPLOYED_MINES_PER_PLAYER} MINEN AKTIV`, 700);
+    announce(t("announce.mineMax", { name: entity.name, max: MAX_DEPLOYED_MINES_PER_PLAYER }), 700);
     return;
   }
   entity.mines -= 1;
@@ -1406,7 +1523,7 @@ function deployMine(entity, now) {
     phase: Math.random() * Math.PI * 2,
   });
   updateHud();
-  announce(`${entity.name} // MINE GELEGT · ${entity.mines} ÜBRIG`, 650);
+  announce(t("announce.minePlaced", { name: entity.name, count: entity.mines }), 650);
 }
 
 function updateMines(dt, now) {
@@ -1464,7 +1581,7 @@ function shatterWall(wall, impactPosition) {
     });
   }
   burst(impactPosition, 0xffffff, 34, 20);
-  announce("MAUER ZERSTÖRT", 700);
+  announce(t("announce.wallDestroyed"), 700);
 }
 
 function updateShells(dt, now) {
@@ -1523,7 +1640,7 @@ function hitTank(target, shell, now) {
       burst(shell.mesh.position, 0xff263b, 38, 18);
       const result = damage(target, shell.owner, now, 50, true);
       if (!result.destroyed) {
-        announce(`${target.name} // SCHILD ZERSTÖRT · ${target.armor}% ENERGIE`, 1100);
+        announce(t("announce.shieldDestroyed", { name: target.name, armor: target.armor }), 1100);
       }
       updateHud();
       return "damaged";
@@ -1545,11 +1662,17 @@ function hitTank(target, shell, now) {
       shell.life = Math.max(shell.life, 2.1);
       shell.reflections += 1;
       shell.mesh.material = shellPool.material(0xff5cff);
-      announce(`${target.name} // REFLEKTION ${shieldStillActive ? target.shieldHits : 0}/5`, 650);
+      announce(t("announce.reflectHits", {
+        name: target.name,
+        hits: shieldStillActive ? target.shieldHits : 0,
+      }), 650);
       updateHud();
       return "reflected";
     }
-    announce(`${target.name} // SCHILD ${shieldStillActive ? target.shieldHits : 0}/5`, 650);
+    announce(t("announce.shieldHits", {
+      name: target.name,
+      hits: shieldStillActive ? target.shieldHits : 0,
+    }), 650);
     updateHud();
     return "absorbed";
   }
@@ -1563,7 +1686,7 @@ function damage(target, attacker, now, amount, suppressHitAnnounce = false) {
   burst(target.group.position.clone().setY(2.2), target.accent, 24, 17);
   gameAudio.explosion(result.destroyed ? 0.95 : 0.72);
   if (!result.destroyed) {
-    if (!suppressHitAnnounce) announce(`${target.name} // ${target.armor}% ENERGIE`, 650);
+    if (!suppressHitAnnounce) announce(t("announce.energy", { name: target.name, armor: target.armor }), 650);
     updateHud();
     return result;
   }
@@ -1577,7 +1700,7 @@ function damage(target, attacker, now, amount, suppressHitAnnounce = false) {
     running = false;
     setTimeout(() => showResult(attacker), 700);
   } else {
-    announce(`${target.name} // LEBEN VERLOREN`, 1200);
+    announce(t("announce.lifeLost", { name: target.name }), 1200);
     target.respawnAt = now + 2.25;
   }
   return result;
@@ -1691,7 +1814,7 @@ function applyPowerup(entity, powerup, now) {
     default:
       return false;
   }
-  announce(`${entity.name} // ${powerup.config.label}`, 950);
+  announce(`${entity.name} // ${t(`powerup.${powerup.type}`, {}, powerup.config.label)}`, 950);
   return true;
 }
 
@@ -1800,21 +1923,21 @@ function updateHud(now = performance.now() / 1000) {
   const shield = (entity) => {
     if (!entity.shieldType) return "";
     const remaining = Math.max(0, Math.ceil(entity.shieldUntil - now));
-    const label = entity.shieldType === "reflect" ? "SPIEGEL" : "SCHILD";
-    return `<em class="${entity.shieldType}">${label} ${remaining}s · ${entity.shieldHits} TREFFER</em>`;
+    const key = entity.shieldType === "reflect" ? "hud.shieldReflect" : "hud.shieldNormal";
+    return `<em class="${entity.shieldType}">${t(key, { sec: remaining, hits: entity.shieldHits })}</em>`;
   };
   const content = (entity) => `
     <div class="hud-heading"><strong>${entity.name}</strong><b>${entity.armor}%</b></div>
     <div class="lives">${lifeIcons(entity)}</div>
     <div class="armor"><i style="width:${entity.armor}%"></i></div>
     <div class="resources">
-      <span class="${entity.ammo ? "" : "empty"}">MUNITION ${entity.ammo}</span>
+      <span class="${entity.ammo ? "" : "empty"}">${t("hud.ammo", { count: entity.ammo })}</span>
       ${shield(entity)}
-      ${entity.lethalShots ? '<em class="lethal">☠ TÖDLICHER SCHUSS BEREIT</em>' : ""}
-      ${entity.wallBreakerShots ? `<em class="breaker">⚒ MAUERBRECHER ${entity.wallBreakerShots}</em>` : ""}
-      ${entity.mines ? `<em class="mines">MINEN ${entity.mines} · M</em>` : ""}
-      ${entity.satelliteCharges ? '<em class="satellite">◉ SATELLIT 1 · U</em>' : ""}
-      ${entity.satelliteUntil > now ? `<em class="satellite">ORBITAL ${Math.ceil(entity.satelliteUntil - now)}s</em>` : ""}
+      ${entity.lethalShots ? `<em class="lethal">${t("hud.lethal")}</em>` : ""}
+      ${entity.wallBreakerShots ? `<em class="breaker">${t("hud.breaker", { count: entity.wallBreakerShots })}</em>` : ""}
+      ${entity.mines ? `<em class="mines">${t("hud.mines", { count: entity.mines })}</em>` : ""}
+      ${entity.satelliteCharges ? `<em class="satellite">${t("hud.satellite")}</em>` : ""}
+      ${entity.satelliteUntil > now ? `<em class="satellite">${t("hud.orbital", { sec: Math.ceil(entity.satelliteUntil - now) })}</em>` : ""}
     </div>`;
   ui.p1.style.setProperty("--tank-accent", `#${entities[0].accent.toString(16).padStart(6, "0")}`);
   ui.p2.style.setProperty("--tank-accent", `#${entities[1].accent.toString(16).padStart(6, "0")}`);
@@ -1830,7 +1953,7 @@ function announce(text, duration) {
 }
 
 function showResult(winner) {
-  ui.resultTitle.textContent = `${winner.name} WINS`;
+  ui.resultTitle.textContent = t("result.wins", { name: winner.name });
   ui.result.classList.remove("hidden");
 }
 
@@ -1842,9 +1965,9 @@ function showMenu() {
   clearWorld();
   latestNetworkSnapshot = null;
   ui.result.classList.add("hidden");
-  ui.title.classList.add("hidden");
   ui.lobby.classList.add("hidden");
-  ui.menu.classList.remove("hidden");
+  ui.title.classList.remove("hidden");
+  refreshMenuLabels();
   titleMusic.play();
   ui.p1.innerHTML = "";
   ui.p2.innerHTML = "";
@@ -1864,7 +1987,7 @@ function showMenu() {
 function togglePause() {
   paused = !paused;
   running = !paused;
-  announce(paused ? "PAUSED" : "RESUME", paused ? 999999 : 600);
+  announce(paused ? t("announce.paused") : t("announce.resume"), paused ? 999999 : 600);
   if (running) clock.getDelta();
 }
 
@@ -1969,6 +2092,7 @@ function loop() {
     entities.forEach((entity) => updateCamera(entity, dt, now));
   }
   render();
+  renderTitleLogo(dt, now);
   pressedKeys.clear();
 }
 

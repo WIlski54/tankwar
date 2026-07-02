@@ -25,6 +25,9 @@ const files = [
   "assets/audio/tank-shot.mp3",
   "assets/audio/eclipse-within.mp3",
   "assets/ui/panzer-duell-title.png",
+  "assets/ui/menu-button-red.png",
+  "assets/ui/menu-button-blue.png",
+  "assets/ui/wk-logo.glb",
 ];
 
 await rm(outputRoot, { recursive: true, force: true });
